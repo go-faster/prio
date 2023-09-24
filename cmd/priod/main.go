@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"io"
-	"sort"
-	"syscall"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/go-faster/errors"
@@ -29,7 +31,7 @@ func main() {
 			return errors.Wrap(err, "init")
 		}
 		return a.Run(ctx)
-	})
+	}, app.WithZapConfig(NewConsole()))
 }
 
 type App struct {
@@ -55,15 +57,6 @@ func NewApp(logger *zap.Logger, metrics *app.Metrics) (*App, error) {
 	return a, nil
 }
 
-func Keys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
 // Handle exec event, setting scheduler mode based on pod labels.
 func (a *App) Handle(ctx context.Context, event *tetragon.ProcessExec) error {
 	if event == nil {
@@ -75,10 +68,6 @@ func (a *App) Handle(ctx context.Context, event *tetragon.ProcessExec) error {
 	defer span.End()
 
 	pod := event.GetProcess().GetPod()
-	zctx.From(ctx).Info("Pod",
-		zap.Strings("labels", pod.GetLabels()),
-		zap.Strings("pod.label.keys", Keys(pod.GetPodLabels())),
-	)
 	policyStr, ok := pod.GetPodLabels()["prio.go-faster.io/policy"]
 	if !ok {
 		zctx.From(ctx).Warn("No scheduler policy set")
@@ -93,17 +82,33 @@ func (a *App) Handle(ctx context.Context, event *tetragon.ProcessExec) error {
 	if pid == 0 {
 		return errors.New("pid is zero")
 	}
-
 	zctx.From(ctx).Info("Pid",
 		zap.Int("process.pid", pid),
 		zap.Uint32("process.value.pid", event.GetProcess().GetPid().GetValue()),
 		zap.Uint32("parent.pid", event.GetParent().GetPid().GetValue()),
+		zap.String("process.binary", event.GetProcess().GetBinary()),
 	)
-
-	if err := syscall.Kill(pid, syscall.SIGSTOP); err != nil {
-		return errors.Wrap(err, "kill")
+	{
+		// HACK: some debugging
+		// TODO: remove
+		cmd := exec.Command("ps", "-A", "-o", "pid,cmd")
+		buf := new(bytes.Buffer)
+		cmd.Stdout = buf
+		if err := cmd.Run(); err != nil {
+			return errors.Wrap(err, "ps")
+		}
+		scanner := bufio.NewScanner(buf)
+		for scanner.Scan() {
+			// HACK: only for debug
+			line := scanner.Text()
+			if !strings.Contains(line, event.GetProcess().GetBinary()) {
+				continue
+			}
+			zctx.From(ctx).Info("From ps output:",
+				zap.String("line", strings.TrimSpace(line)),
+			)
+		}
 	}
-
 	if err := schedpolicy.Set(pid, policy, 0); err != nil {
 		return errors.Wrap(err, "set policy")
 	}
@@ -173,7 +178,9 @@ func (a *App) Run(ctx context.Context) error {
 				switch resp.EventType() {
 				case tetragon.EventType_PROCESS_EXEC:
 					if err := a.Handle(ctx, resp.GetProcessExec()); err != nil {
-						zctx.From(ctx).Error("Handle", zap.Error(err))
+						zctx.From(ctx).Error("Handle",
+							zap.String("err", err.Error()),
+						)
 					}
 				default:
 					a.log.Warn("Unknown event type", zap.Stringer("type", resp.EventType()))

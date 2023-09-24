@@ -1,11 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
+  namespace: default
   name: prio-example
   labels:
     app: prio-example
 spec:
-  replicas: 10
   selector:
     matchLabels:
       app: prio-example
