@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: priod
+  namespace: kube-system
+  labels:
+    service.opentelemetry.io/name: go-faster.prio
+spec:
+  selector:
+    matchLabels:
+      name: priod
+  template:
+    metadata:
+      labels:
+        name: priod
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      hostNetwork: true
+      hostPID: true
+      hostIPC: true
+      hostUsers: true
+      containers:
+        - name: priod
+          securityContext:
+            privileged: true
+          image: ghcr.io/go-faster/prio:v0
+          imagePullPolicy: Never
+          env:
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_TRACES_EXPORTER
+              value: "none"
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          volumeMounts:
+            - name: tetragon
+              mountPath: /var/run/tetragon/
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: tetragon
+          hostPath:
+            path: /var/run/tetragon/
+

@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prio-example
+  labels:
+    app: prio-example
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: prio-example
+  template:
+    metadata:
+      labels:
+        app: prio-example
+        "prio.go-faster.io/managed": "true"
+        "prio.go-faster.io/policy": "batch"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/go-faster/prio/example:v0
+          env:
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_TRACES_EXPORTER
+              value: "none"
