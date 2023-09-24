@@ -39,7 +39,7 @@ func consoleDeltaEncoder(now time.Time) zapcore.TimeEncoder {
 	}
 }
 
-func NewConsole() zap.Config {
+func newConsoleZapConfig() zap.Config {
 	cfg := zap.NewDevelopmentConfig()
 	cfg.DisableStacktrace = true
 	cfg.DisableCaller = true
@@ -59,10 +59,10 @@ func NewConsole() zap.Config {
 	return cfg
 }
 
-func New() zap.Config {
+func newZapConfig() zap.Config {
 	if term.IsTerminal(int(os.Stderr.Fd())) {
 		// Interactive terminal, using console output.
-		return NewConsole()
+		return newConsoleZapConfig()
 	}
 
 	zapCfg := zap.NewProductionConfig()

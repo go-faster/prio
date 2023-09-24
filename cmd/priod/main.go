@@ -1,12 +1,8 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"io"
-	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/go-faster/errors"
@@ -17,7 +13,6 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -31,7 +26,7 @@ func main() {
 			return errors.Wrap(err, "init")
 		}
 		return a.Run(ctx)
-	}, app.WithZapConfig(NewConsole()))
+	}, app.WithZapConfig(newZapConfig()))
 }
 
 type App struct {
@@ -59,16 +54,9 @@ func NewApp(logger *zap.Logger, metrics *app.Metrics) (*App, error) {
 
 // Handle exec event, setting scheduler mode based on pod labels.
 func (a *App) Handle(ctx context.Context, event *tetragon.ProcessExec) error {
-	if event == nil {
-		// Move before Handle?
-		return nil
-	}
-
 	ctx, span := a.tracer.Start(ctx, "Handle")
 	defer span.End()
-
-	pod := event.GetProcess().GetPod()
-	policyStr, ok := pod.GetPodLabels()["prio.go-faster.io/policy"]
+	policyStr, ok := event.GetProcess().GetPod().GetPodLabels()["prio.go-faster.io/policy"]
 	if !ok {
 		zctx.From(ctx).Warn("No scheduler policy set")
 		return nil
@@ -77,47 +65,14 @@ func (a *App) Handle(ctx context.Context, event *tetragon.ProcessExec) error {
 	if err != nil {
 		return errors.Wrap(err, "parse policy")
 	}
-
 	pid := int(event.GetProcess().GetPid().GetValue())
 	if pid == 0 {
 		return errors.New("pid is zero")
-	}
-	zctx.From(ctx).Info("Pid",
-		zap.Int("process.pid", pid),
-		zap.Uint32("process.value.pid", event.GetProcess().GetPid().GetValue()),
-		zap.Uint32("parent.pid", event.GetParent().GetPid().GetValue()),
-		zap.String("process.binary", event.GetProcess().GetBinary()),
-	)
-	{
-		// HACK: some debugging
-		// TODO: remove
-		cmd := exec.Command("ps", "-A", "-o", "pid,cmd")
-		buf := new(bytes.Buffer)
-		cmd.Stdout = buf
-		if err := cmd.Run(); err != nil {
-			return errors.Wrap(err, "ps")
-		}
-		scanner := bufio.NewScanner(buf)
-		for scanner.Scan() {
-			// HACK: only for debug
-			line := scanner.Text()
-			if !strings.Contains(line, event.GetProcess().GetBinary()) {
-				continue
-			}
-			zctx.From(ctx).Info("From ps output:",
-				zap.String("line", strings.TrimSpace(line)),
-			)
-		}
 	}
 	if err := schedpolicy.Set(pid, policy, 0); err != nil {
 		return errors.Wrap(err, "set policy")
 	}
 	a.processed.Add(ctx, 1)
-	zctx.From(ctx).Info("Set scheduler policy",
-		zap.Stringer("policy", policy),
-		zap.Int("pid", pid),
-	)
-
 	return nil
 }
 
@@ -140,59 +95,48 @@ func (a *App) Run(ctx context.Context) error {
 		return errors.Wrap(err, "failed to dial")
 	}
 
-	wg, ctx := errgroup.WithContext(ctx)
-	wg.Go(func() error {
-		defer func() {
-			a.log.Info("Finished")
-		}()
-
-		client := tetragon.NewFineGuidanceSensorsClient(tetragonConn)
-		version, err := client.GetVersion(ctx, &tetragon.GetVersionRequest{})
-		if err != nil {
-			return errors.Wrap(err, "get version")
-		}
-
-		a.log.Info("Connected to tetragon server", zap.String("version", version.Version))
-		b, err := client.GetEvents(ctx, &tetragon.GetEventsRequest{
-			AllowList: []*tetragon.Filter{
-				{
-					Labels: []string{
-						"prio.go-faster.io/managed=true",
-					},
-					EventSet: []tetragon.EventType{
-						tetragon.EventType_PROCESS_EXEC,
-					},
+	client := tetragon.NewFineGuidanceSensorsClient(tetragonConn)
+	version, err := client.GetVersion(ctx, &tetragon.GetVersionRequest{})
+	if err != nil {
+		return errors.Wrap(err, "get version")
+	}
+	a.log.Info("Connected to tetragon server", zap.String("version", version.Version))
+	b, err := client.GetEvents(ctx, &tetragon.GetEventsRequest{
+		AllowList: []*tetragon.Filter{
+			{
+				Labels: []string{
+					"prio.go-faster.io/managed=true",
+				},
+				EventSet: []tetragon.EventType{
+					tetragon.EventType_PROCESS_EXEC,
 				},
 			},
-		})
-		if err != nil {
-			return errors.Wrap(err, "get events")
-		}
-
-		for {
-			resp, err := b.Recv()
-			switch err {
-			case io.EOF, context.Canceled:
-				return nil
-			case nil:
-				switch resp.EventType() {
-				case tetragon.EventType_PROCESS_EXEC:
-					if err := a.Handle(ctx, resp.GetProcessExec()); err != nil {
-						zctx.From(ctx).Error("Handle",
-							zap.String("err", err.Error()),
-						)
-					}
-				default:
-					a.log.Warn("Unknown event type", zap.Stringer("type", resp.EventType()))
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "get events")
+	}
+	for {
+		resp, err := b.Recv()
+		switch err {
+		case io.EOF, context.Canceled:
+			return nil
+		case nil:
+			switch resp.EventType() {
+			case tetragon.EventType_PROCESS_EXEC:
+				if err := a.Handle(ctx, resp.GetProcessExec()); err != nil {
+					zctx.From(ctx).Error("Handle",
+						zap.String("err", err.Error()),
+					)
 				}
 			default:
-				if status.Code(err) == codes.Canceled {
-					return nil
-				}
-				return errors.Wrap(err, "recv")
+				a.log.Warn("Unknown event type", zap.Stringer("type", resp.EventType()))
 			}
+		default:
+			if status.Code(err) == codes.Canceled {
+				return nil
+			}
+			return errors.Wrap(err, "recv")
 		}
-	})
-
-	return wg.Wait()
+	}
 }
