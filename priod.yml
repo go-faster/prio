@@ -20,7 +20,6 @@ spec:
           securityContext:
             privileged: true
           image: ghcr.io/go-faster/prio:v0
-          imagePullPolicy: Never
           env:
             - name: OTEL_METRICS_EXPORTER
               value: "none"
