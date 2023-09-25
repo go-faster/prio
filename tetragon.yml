@@ -15,7 +15,7 @@ tetragon:
   exportFilename: "" # disable file export
   enabled: true
   enableK8sAPI: true
-  enableCiliumAPI: true
+  enableCiliumAPI: false
   enableProcessCred: true
   enableProcessNs: true
   extraVolumeMounts:
