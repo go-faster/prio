@@ -8,8 +8,8 @@ require (
 	github.com/go-faster/schedpolicy v0.2.0
 	github.com/go-faster/sdk v0.13.0
 	github.com/go-faster/tetragon/api v0.0.0-20230221120311-06f4d6348dc0
-	go.opentelemetry.io/otel/metric v1.21.0
-	go.opentelemetry.io/otel/trace v1.21.0
+	go.opentelemetry.io/otel/metric v1.22.0
+	go.opentelemetry.io/otel/trace v1.22.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/term v0.16.0
 	google.golang.org/grpc v1.60.1
@@ -19,7 +19,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/go-logr/logr v1.3.0 // indirect
+	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -42,7 +42,7 @@ require (
 	go.opentelemetry.io/contrib/propagators/b3 v1.21.1 // indirect
 	go.opentelemetry.io/contrib/propagators/jaeger v1.21.1 // indirect
 	go.opentelemetry.io/contrib/propagators/ot v1.21.1 // indirect
-	go.opentelemetry.io/otel v1.21.0 // indirect
+	go.opentelemetry.io/otel v1.22.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v0.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v0.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.21.0 // indirect
