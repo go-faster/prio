@@ -10,7 +10,7 @@ require (
 	github.com/go-faster/tetragon/api v0.0.0-20230221120311-06f4d6348dc0
 	go.opentelemetry.io/otel/metric v1.23.1
 	go.opentelemetry.io/otel/trace v1.23.1
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	golang.org/x/term v0.17.0
 	google.golang.org/grpc v1.61.1
 )
