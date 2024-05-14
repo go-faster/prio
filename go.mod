@@ -3,7 +3,7 @@ module prio
 go 1.21
 
 require (
-	github.com/fatih/color v1.16.0
+	github.com/fatih/color v1.17.0
 	github.com/go-faster/errors v0.7.1
 	github.com/go-faster/schedpolicy v0.2.0
 	github.com/go-faster/sdk v0.13.0
